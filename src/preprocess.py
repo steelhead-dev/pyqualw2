@@ -1,21 +1,32 @@
 import typer
+from pathlib import Path
+from typing_extensions import Annotated
 import pandas as pd
 import os
 
-def main(model_directory: str):
-    """
-
-    Parameters
-    ----------
-    model_directory : str
+app = typer.Typer()
 
 
-    """
-    working_directory = os.getcwd()
+@app.command()
+def process_directory(
+    directory: Annotated[
+        Path,
+        typer.Argument(
+            help='The directory to process.',
+            exists=True, #Ensure diectory exisit
+            dir_okay=True, # Ensure it's a directory
+            file_okay=False, # Ensure it's not a file
+        )
+    ]
+):
+    absolute_path = directory.resolve()
+    print(f"Absolute path of the directory: {absolute_path}")
 
-    model_path = os.path.join(working_directory, model_directory)
+    print("Contents of the directory")
+    for item in absolute_path.iterdir():
+        print(f"- {item.name}")
 
-    print(f"{model_path}")
+
 
 if __name__ == "__main__":
-    typer.run(main)
+    app()

@@ -50,6 +50,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-25.0-pyh29332c3_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pandas-2.3.3-py314ha0b5721_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/parso-0.8.5-pyhcf101f3_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/pathlib-1.0.1-py_1.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/pathspec-0.12.1-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/platformdirs-4.5.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pluggy-1.6.0-pyhd8ed1ab_0.conda
@@ -622,6 +623,15 @@ packages:
   license_family: MIT
   size: 81562
   timestamp: 1755974222274
+- conda: https://conda.anaconda.org/conda-forge/noarch/pathlib-1.0.1-py_1.tar.bz2
+  sha256: ab8c9402ef7d8e8b23b66f27a5e9eafd63d3193c6531a62b4ae9b8a949f356e7
+  md5: 930df2b5ca63ffdd1dd5f8b235f344a2
+  depends:
+  - python
+  license: MIT
+  license_family: MIT
+  size: 14998
+  timestamp: 1531194126420
 - conda: https://conda.anaconda.org/conda-forge/noarch/pathspec-0.12.1-pyhd8ed1ab_1.conda
   sha256: 9f64009cdf5b8e529995f18e03665b03f5d07c0b17445b8badef45bde76249ee
   md5: 617f15191456cc6a13db418a275435e5
