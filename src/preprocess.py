@@ -27,6 +27,5 @@ def process_directory(
         print(f"- {item.name}")
 
 
-
 if __name__ == "__main__":
     app()
