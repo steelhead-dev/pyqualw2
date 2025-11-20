@@ -1,10 +1,15 @@
+import typer
 import pandas as pd
+import os
 
+def main(model_directory: str):
+    '''
+    '''
+    working_directory = os.getcwd()
 
+    model_path = os.path.join(working_directory, model_directory)
 
+    print(f"{model_path}")
 
-config_file_path = '../Model/W2_con.csv'
-
-config_DF = pd.read_csv(config_file_path,index_col=0)
-
-print(config_DF.head())
+if __name__ == "__main__":
+    typer.run(main)
