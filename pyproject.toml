@@ -9,7 +9,7 @@ dependencies = [
     "typer>=0.20",
     "pandas",
     "rich"
-]
+, "tomli>=2.3.0,<3"]
 
 [workspace]
 authors = ["bobo-baggins <urbanecoguard@gmail.com>"]
