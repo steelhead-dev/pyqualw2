@@ -33,6 +33,9 @@ def process_directory(
         if item.name == "inputs":
             model_file_dictionary["model_inputs_path"] = item.resolve()
             print(f"Config file logged at {model_file_dictionary["model_inputs_path"]}")
+        if item.name == "outputs":
+            model_file_dictionary["model_outputs_path"] = item.resolve()
+            print(f"Config file logged at {model_file_dictionary["model_outputs_path"]}")
         if item.name == "w2_con.csv":
             model_file_dictionary["model_config_path"] = item.resolve()
             print(f"Config file logged at {model_file_dictionary["model_config_path"]}")
