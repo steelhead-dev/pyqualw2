@@ -30,6 +30,9 @@ def process_directory(
     print(f"Absolute path of the directory: {model_directory}")
 
     for item in model_directory.iterdir():
+        if item.name == "inputs":
+            model_file_dictionary["model_inputs_path"] = item.resolve()
+            print(f"Config file logged at {model_file_dictionary["model_inputs_path"]}")
         if item.name == "w2_con.csv":
             model_file_dictionary["model_config_path"] = item.resolve()
             print(f"Config file logged at {model_file_dictionary["model_config_path"]}")
