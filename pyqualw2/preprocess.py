@@ -33,21 +33,28 @@ def process_directory(
     for item in model_directory.iterdir():
         if item.name == "inputs":
             model_file_dictionary["model_inputs_path"] = item.resolve()
-            print(f"Config file logged at {model_file_dictionary["model_inputs_path"]}")
+#            print(f"Config file logged at {model_file_dictionary["model_inputs_path"]}")
         if item.name == "outputs":
             model_file_dictionary["model_outputs_path"] = item.resolve()
-            print(f"Config file logged at {model_file_dictionary["model_outputs_path"]}")
+#            print(f"Config file logged at {model_file_dictionary["model_outputs_path"]}")
         if item.name == "w2_con.csv":
             model_file_dictionary["model_config_path"] = item.resolve()
-            print(f"Config file logged at {model_file_dictionary["model_config_path"]}")
+#            print(f"Config file logged at {model_file_dictionary["model_config_path"]}")
         if item.name == "run_settings.toml":
             model_file_dictionary["run_settings_path"] = item.resolve()
-            print(f"Config file logged at {model_file_dictionary["run_settings_path"]}")
+#            print(f"Config file logged at {model_file_dictionary["run_settings_path"]}")
 
 #def parse_run_settings ():
-    with open(model_file_dictionary["run_settings_path"], mode = 'rb') as run_settings:
-        settings = tomli.load(run_settings)
-        print(settings)
+    with open(model_file_dictionary["run_settings_path"], mode = 'rb') as f:
+        settings = tomli.load(f)
+        #print(settings)
+
+        model_details = settings['model_details']
+        run_settings = settings['run_settings']
+        time_start = run_settings['time_start']
+        time_end = run_settings['time_end']
+        print(f"The starting date and tiem is {time_start}")
+        print(f"The ending date and tiem is {time_end}")
 
 if __name__ == "__main__":
     app()
