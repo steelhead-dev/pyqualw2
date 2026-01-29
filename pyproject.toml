@@ -11,7 +11,8 @@ dependencies = [
     "typer>=0.20",
     "pandas",
     "rich",
-    "tomli>=2.3.0,<3"
+    "tomli>=2.3.0,<3",
+    "pydantic-settings>=2.12.0",
 ]
 dynamic = ["version"]
 
@@ -20,6 +21,9 @@ dev = [
     "prek",
     "ruff",
     "python-lsp-server",
+]
+test = [
+    "pytest"
 ]
 
 [workspace]
@@ -77,6 +81,7 @@ ignore = [
     "D100", # Missing docstring in public module
     "D104", # Missing docstring in public package
     "D105", # Missing docstring in magic method
+    "D107", # Missing docstring in __init__
     "D203", # 1 blank line before after class docstring
     "D213", # Multiline summary second line
     "D413", # 1 black line after parameters
@@ -91,9 +96,13 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
-"test_*.py" = [
+"test/*.py" = [
     "ANN001",
     "N802",  # Function name should be lowercase
+]
+"pyqualw2/config/subconfig.py" = [
+    "D101",
+    "D102",
 ]
 
 [tool.isort]
