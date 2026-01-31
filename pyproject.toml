@@ -78,6 +78,7 @@ ignore = [
     "D100", # Missing docstring in public module
     "D104", # Missing docstring in public package
     "D105", # Missing docstring in magic method
+    "D107", # Missing docstring in __init__
     "D203", # 1 blank line before after class docstring
     "D213", # Multiline summary second line
     "D413", # 1 black line after parameters

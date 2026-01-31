@@ -479,7 +479,7 @@ packages:
 - pypi: ./
   name: pyqualw2
   version: 0.0.1
-  sha256: 63e88b1b2fc6e8f08674ce41c265fe11041498bb99ab59961d3fccc4601ecaae
+  sha256: 45d1af7b8b1833f2f2e494f476a86a2c3211ba900ae7abeb20d070b91a5039a5
   requires_dist:
   - typer>=0.20
   - pandas
