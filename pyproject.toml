@@ -1,15 +1,19 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
 [project]
 name = "pyqualw2"
 description = "A CE-QUAL-W2 orchestration toolkit"
 readme = "README.md"
 requires-python = ">=3.13"
-version = "0.0.1"
 dependencies = [
     "typer>=0.20",
     "pandas",
     "rich",
     "tomli>=2.3.0,<3"
 ]
+dynamic = ["version"]
 
 [project.optional-dependencies]
 dev = [
@@ -25,6 +29,11 @@ name = "pyqualw2"
 platforms = ["linux-64"]
 version = "0.1.0"
 
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pyqualw2"]
 
 [tool.pixi.workspace]
 name = "pyqualw2"
