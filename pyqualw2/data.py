@@ -1,12 +1,12 @@
 import re
 import warnings
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from io import StringIO
 from os import PathLike
 from pathlib import Path
 from typing import Self
 
-import numpy as np
 import pandas as pd
 
 
@@ -30,32 +30,23 @@ class BaseData(ABC):
         """
 
 
+@dataclass
 class Bathymetry(BaseData):
     """Container for Bathymetry data."""
 
-    def __init__(
-        self,
-        dlx: np.array,
-        elws: np.array,
-        phi0: np.array,
-        fric: np.array,
-        data: pd.DataFrame,
-        file: PathLike | None = None,
-    ):
-        self.file = file
-        self.dlx = dlx
-        self.elws = elws
-        self.phi0 = phi0
-        self.fric = fric
-        self.data = data
+    data: pd.DataFrame
+    segment_data: pd.DataFrame
+    ignored: list[str]
+    filename: PathLike | None = None
+    comment: str | None = None
 
     @classmethod
-    def from_file(cls, file: PathLike) -> Self:
+    def from_file(cls, filename: PathLike) -> Self:
         """Parse a bathymetry file.
 
         Parameters
         ----------
-        file : PathLike
+        filename : PathLike
             Path to a bathymetry file, e.g. mbth_wb1.csv
 
         Returns
@@ -63,63 +54,112 @@ class Bathymetry(BaseData):
         Self
             The segment metadata and the bathymetry data
         """
-        if Path(file).suffix != ".csv":
+        if Path(filename).suffix != ".csv":
             raise NotImplementedError
 
-        # Segment metadata. Ignore first two lines:
-        # $Millerton Bathymetry,,,,,,,,,,,...
-        # ,1,2,3,4,5,6,7,8,9,10,11,12,13,...
-        #
-        # but read the next 4 rows, which give per-segment DLX, ELWS, PHI0, and FRIC.
-        # The values are stored in columns; transpose and update the column names.
-        segments = pd.read_csv(file, index_col=False, skiprows=2, nrows=4, header=None)
-        segments = segments.transpose().drop(index=segments.columns[-1]).reset_index()
-        segments.columns = segments.iloc[0]
-        segments = segments.iloc[1:]
+        with open(filename) as f:
+            lines = f.readlines()
 
-        # Finally, read the rest of the file to get the bathymetry data
-        data = pd.read_csv(file, index_col=False, skiprows=7, header=None)
-        data.columns = [f"Layer {i}" for i in range(len(data.columns - 2))] + [
-            "K",
-            "ELEV",
-        ]
+        # The first 7 lines are file headings and segment data.
+        # Extract the comment, if any
+        matched = re.match(r"\$(.*),", lines[0])
+        if matched:
+            comment = matched.group(0)
+        else:
+            comment = None
+
+        # Read the segment data from the next 5 rows. The first of these lines SHOULD
+        # contain
+        #
+        #       Seg, followed by a header for each model segment, this is ignored
+        #
+        # according to the manual, but in practice I don't see 'Seg' appearing in any of
+        # the bathymetry files so we manually replace it here.
+        #
+        # Also drop any nan-valued rows, they arise from superfluous comma separators at
+        # the end of rows.
+        segment_data = (
+            pd.read_csv(
+                StringIO("\n".join(lines[1:6])),
+                index_col=False,
+            )
+            .rename(columns={"Unnamed: 0": "SEG"})
+            .transpose()
+            .dropna(axis=0, how="any")
+            .reset_index()
+        )
+        segment_data.columns = segment_data.iloc[0]
+        segment_data = segment_data.iloc[1:]
+
+        # Add some missing units
+        segment_data = segment_data.rename(
+            columns={
+                "DLX": "DLX [m]",
+                "ELWS": "ELWS [m]",
+                "PHI0": "PHI0 [rad]",
+            }
+        )
+
+        # 7th line: titles that are ignored by the model.
+        # Not sure if the placement of any of these has any significance, so we just
+        # keep everything here
+        ignored = lines[6].strip().split(",")
+
+        # (From the manual) 8th line to end of file:
+        #
+        #   1st column is layer height in m
+        #   2nd column are segment widths in m for segment 1,
+        #   3rd column are segment widths in m for segment 2, etc.
+        #
+        # Note that the segment widths for the first segment and last segment are 0 and
+        # for the top layer K=1 and bottom layer are also 0. On the far right-hand side
+        # there is a layer # specification.
+        data = pd.read_csv(
+            StringIO("\n".join(lines[7:])),
+            index_col=False,
+            header=None,
+        )
+
+        # There's an extra comma delimeter at the end of each column which results in a
+        # phantom column, so we drop that extra column here
+        data = data.drop(columns=data.columns[-1])
+
+        # Rename and reorder the columns to make more sense
+        nsegments = len(data.columns) - 2
+        data.columns = (
+            ["Layer height [m]"]
+            + [f"Width (segment {i + 1}) [m]" for i in range(nsegments)]
+            + ["Layer #"]
+        )
+        data = data[["Layer #", "Layer height [m]"] + data.columns[1:-1].to_list()]
 
         return cls(
-            file=file,
-            dlx=segments["DLX"].to_numpy(),
-            elws=segments["ELWS"].to_numpy(),
-            phi0=segments["PHI0"].to_numpy(),
-            fric=segments["FRIC"].to_numpy(),
+            filename=filename,
+            segment_data=segment_data,
+            comment=comment,
+            ignored=ignored,
             data=data,
         )
 
 
+@dataclass
 class Temperature(BaseData):
     """A container for temperature data."""
 
-    def __init__(
-        self,
-        temperc: pd.DataFrame,
-        tds: pd.DataFrame,
-        do: pd.DataFrame,
-        profile_file: str | None,
-        file: PathLike,
-        comment: str,
-    ):
-        self.file = file
-        self.tds = tds
-        self.temperc = temperc
-        self.do = do
-        self.comment = comment
-        self.profile_file = profile_file
+    comment: str
+    do: pd.DataFrame
+    profile_file: str | None
+    tds: pd.DataFrame
+    temperc: pd.DataFrame
+    filename: PathLike | None = None
 
     @classmethod
-    def from_file(cls, file: PathLike) -> Self:
+    def from_file(cls, filename: PathLike) -> Self:
         """Parse a temperature profile file.
 
         Parameters
         ----------
-        file : PathLike
+        filename : PathLike
             Path to a temperature profile file, e.g. mvpr1.npt
 
         Returns
@@ -127,18 +167,18 @@ class Temperature(BaseData):
         Self
             The temperature profile, total dissolved solids, and dissolved oxygen
         """
-        if Path(file).suffix != ".npt":
+        if Path(filename).suffix != ".npt":
             raise NotImplementedError
 
         profile_file = None
         comment = None
 
-        with open(file) as f:
+        with open(filename) as f:
             lines = f.readlines()
 
         if len(lines) < 2:
             raise ValueError(
-                f"{file} doesn't appear to have temperature data. Aborting."
+                f"{filename} doesn't appear to have temperature data. Aborting."
             )
 
         try:
@@ -171,10 +211,10 @@ class Temperature(BaseData):
             start, end = _get_next_block_idx(lines, end, "DO")
             do = _lines_to_df(lines[start:end])
         except Exception as e:
-            raise ValueError(f"Failed to parse temperature profile: {file}.") from e
+            raise ValueError(f"Failed to parse temperature profile: {filename}.") from e
 
         return cls(
-            file=file,
+            filename=filename,
             temperc=temperc,
             tds=tds,
             do=do,
