@@ -22,6 +22,9 @@ dev = [
     "ruff",
     "python-lsp-server",
 ]
+test = [
+    "pytest"
+]
 
 [workspace]
 authors = ["bobo-baggins <urbanecoguard@gmail.com>"]

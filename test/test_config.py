@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from pyqualw2.config import Config
-from pyqualw2.data import Bathymetry, TemperatureProfile
+from pyqualw2.data import Bathymetry, Profile
 
 
 @pytest.fixture
@@ -28,7 +28,7 @@ def sample_bathymetry(sample_data) -> Path:
 @pytest.fixture
 def sample_temperature(sample_data) -> Path:
     """Get the path to the temperature file."""
-    return sample_data / "w2_con.csv"
+    return sample_data / "mvpr1.npt"
 
 
 @pytest.mark.skip
@@ -58,6 +58,13 @@ def test_load_bathymetry(sample_bathymetry):
 
 def test_load_temperature(sample_temperature):
     """Test that Temperature.from_file can load data from a file."""
-    temp = TemperatureProfile.from_file(sample_temperature)
+    temp = Profile.from_file(sample_temperature)
 
     assert temp.filename == sample_temperature
+    breakpoint()
+    assert temp.comment == (
+        "File created from SJRRP Milerton Temperature Profile Viewer real string "
+        "measurements"
+    )
+    assert temp.profile_file == "2025-05-15_profile.csv"
+    assert temp.data["temperc"].shape == (24, 9)

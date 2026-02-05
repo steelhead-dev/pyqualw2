@@ -478,8 +478,8 @@ packages:
   requires_python: '>=3.8'
 - pypi: ./
   name: pyqualw2
-  version: 0.1.dev9+g07c81f481
-  sha256: 3d8fc6067c1c0f4108ac892ba31652dee6fa61e2fd39a53d25b21d679d819dff
+  version: 0.1.dev10+g6a45bf915.d20260204
+  sha256: 9dfb800cc19acaee13258a4e0a6a402ff9c0c7a143a1efa8d352671f657a960f
   requires_dist:
   - pandas
   - pydantic-settings>=2.12.0
@@ -489,6 +489,7 @@ packages:
   - prek ; extra == 'dev'
   - python-lsp-server ; extra == 'dev'
   - ruff ; extra == 'dev'
+  - pytest ; extra == 'test'
   requires_python: '>=3.13'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.14.0-h32b2ec7_102_cp314.conda
   build_number: 102

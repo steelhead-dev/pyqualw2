@@ -1,6 +1,7 @@
 import re
 import warnings
 from abc import ABC, abstractmethod
+from collections.abc import Generator
 from dataclasses import dataclass
 from io import StringIO
 from os import PathLike
@@ -143,14 +144,12 @@ class Bathymetry(BaseData):
 
 
 @dataclass
-class TemperatureProfile(BaseData):
-    """A container for temperature data."""
+class Profile(BaseData):
+    """A container for profile data."""
 
     comment: str
-    do: pd.DataFrame
+    data: dict[str, pd.DataFrame]
     profile_file: str | None
-    tds: pd.DataFrame
-    temperc: pd.DataFrame
     filename: PathLike | None = None
 
     @classmethod
@@ -198,56 +197,32 @@ class TemperatureProfile(BaseData):
 
             # Second line is a comment describing something about how the temperature
             # profile was created
-            comment = lines[1]
+            comment = lines[1].strip()
 
-            # Next there are three blocks of temperature, dissolved solids, and
-            # dissolved oxygen data
-            start, end = _get_next_block_idx(lines, 2, "TemperC")
-            temperc = _lines_to_df(lines[start:end])
+            lines = lines[2:]
 
-            start, end = _get_next_block_idx(lines, end, "TDS")
-            tds = _lines_to_df(lines[start:end])
+            data = {}
+            breakpoint()
+            for name, df, lines in _get_next_block(lines):
+                data[name] = df
 
-            start, end = _get_next_block_idx(lines, end, "DO")
-            do = _lines_to_df(lines[start:end])
         except Exception as e:
             raise ValueError(f"Failed to parse temperature profile: {filename}.") from e
 
         return cls(
             filename=filename,
-            temperc=temperc,
-            tds=tds,
-            do=do,
+            data=data,
             comment=comment,
             profile_file=profile_file,
         )
 
 
-def _lines_to_df(lines: list[str]) -> pd.DataFrame:
-    """Convert a set of temperature profile lines into a DataFrame.
+def _iter_blocks(
+    lines: list[str],
+) -> Generator[tuple[str, pd.DataFrame, list[str]]]:
+    """Iterate through the data blocks in a profile data file.
 
-    Parameters
-    ----------
-    lines : list[str]
-        A list of lines from a temperature profile file containing a
-        whitespace-separated block of data
-
-    Returns
-    -------
-    pd.DataFrame
-        A DataFrame containing the data block
-    """
-    return pd.read_csv(
-        StringIO("\n".join(lines[1:])),
-        sep=r"\s+",
-        header=None,
-    )
-
-
-def _get_next_block_idx(lines: list[str], start: int, search: str) -> tuple[int, int]:
-    """Get the next data block's indices from the lines of a temperature profile file.
-
-    Temperature profile files have blocks of data that look like this:
+    Profile files have blocks of data that look like this:
 
     TemperC       T1      T1      T1      T1      T1      T1      T1      T1      T1
                20.75   20.35   20.04   19.93   19.74   18.58   15.19   14.32    13.7
@@ -266,30 +241,55 @@ def _get_next_block_idx(lines: list[str], start: int, search: str) -> tuple[int,
                  9.9    9.88    9.87    9.85    9.84    9.83    9.82    9.81    9.79
                 9.78    9.75    9.72    9.69    9.65    9.58     9.5    9.44     9.4
 
-    This function grabs the line indices containing the next block of data.
-
+    This function grabs the next block of data.
 
     Parameters
     ----------
     lines : list[str]
-        Lines read from a temperature profile file
-    start : int
-        Starting index to search
-    search : str
-        Text that the next block of data should start with
-
-    Returns
-    -------
-    tuple[int, int]
-        Starting and ending indices of the next block
+        Lines from a profile file. Data is assumed to start on lines[0], or lines[1] if
+        the current line is empty
+    Generator[tuple[str, pd.DataFrame, list[str]]]
+        Tuples of dataset name, dataframe, and remaning lines to be iterated over
     """
-    for i in range(start, len(lines)):
-        if lines[i].startswith(search):
-            for j in range(i, len(lines)):
-                if lines[j].strip() == "":
-                    return i, j
+    while lines:
+        i = 0
 
-            # End of file may not have a blank line
-            return i, len(lines) + 1
+        if lines[0].strip() == "":
+            i += 1
 
-    raise ValueError("Never found the search term.")
+        if not lines[i:]:
+            return None
+
+        split = re.split(r"\s+", lines[i].strip())
+        if not split:
+            raise ValueError("Unable to extract name of data from profile file")
+
+        # iterate backwards through the split line seeking the first "word" (which may have
+        # spaces...)
+        name = None
+        word = None
+        for j in range(len(split) - 1, -1, -1):
+            if word is None:
+                word = split[j]
+            elif split[j] != word:
+                name = " ".join(split[: j + 1])
+
+        if name is None:
+            raise ValueError("Unable to extract name of data from profile block")
+
+        joined = StringIO()
+        for line in lines[i:]:
+            i += 1
+
+            # An empty line indicates the end of the current block of data
+            if line.strip() == "":
+                break
+
+            joined.write(f"{line.strip()}\n")
+
+        lines = lines[i:]
+
+        # Need to reset the file pointer to the beginning for read_csv
+        joined.seek(0)
+        df = pd.read_csv(joined, sep=r"\s+", header=None, index_col=False)
+        yield name, df
