@@ -66,9 +66,14 @@ def test_load_temperature(sample_temperature):
         "measurements"
     )
     assert prof.profile_file == "2025-05-15_profile.csv"
-    assert prof.data["TemperC"].shape == (24, 9)
-    assert prof.data["TDS mgl"].shape == (24, 9)
-    assert prof.data["DO mgl"].shape == (24, 9)
 
-    breakpoint()
-    assert prof.data["TemperC"]
+    # The profile file for this dataset has 216 entries in each layer-dependent dataset,
+    # despite the fact that the bathymetry only defines 212 layers. The extra layers get
+    # ignored by qualw2, evidently...
+    assert prof.data["TemperC"].shape == (216,)
+    assert prof.data["TDS mgl"].shape == (216,)
+    assert prof.data["DO mgl"].shape == (216,)
+
+    np.testing.assert_equal(prof.data["TemperC"][1:4], [20.35, 20.04, 19.93])
+    np.testing.assert_equal(prof.data["TDS mgl"][6:9], [30.8, 29.5, 28.19])
+    np.testing.assert_equal(prof.data["DO mgl"][1:4], [9.87, 9.94, 9.98])

@@ -3,12 +3,92 @@ import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Generator
 from dataclasses import dataclass
+from enum import Enum, auto
 from io import StringIO
 from os import PathLike
 from pathlib import Path
-from typing import Self
+from typing import Any, Self
 
 import pandas as pd
+
+
+class WTYPEC(Enum):
+    FRESH = auto()
+    SALT = auto()
+
+
+class GRIDC(Enum):
+    RECT = auto()
+    TRAP = auto()
+
+
+class SLHTC(Enum):
+    TERM = auto()
+    ET = auto()
+
+
+class ICEC(Enum):
+    ON = auto()
+    ONWB = auto()
+    OFF = auto()
+
+
+class SLICEC(Enum):
+    SIMPLE = auto()
+    DETAIL = auto()
+
+
+class SLTRC(Enum):
+    ULTIMATE = auto()
+    QUICKEST = auto()
+    UPWIND = auto()
+
+
+class FRICC(Enum):
+    MANN = auto()
+    CHEZY = auto()
+
+
+class AZC(Enum):
+    NICK = auto()
+    PARAB = auto()
+    RNG = auto()
+    W2 = auto()
+    W2N = auto()
+    TKE = auto()
+    TKE1 = auto()
+
+
+class AZSLC(Enum):
+    IMP = auto()
+    EXP = auto()
+
+
+class TKECAL(Enum):
+    IMP = auto()
+    EXP = auto()
+
+
+class SINKC(Enum):
+    POINT = auto()
+    LINE = auto()
+
+
+class WithdrawalType(Enum):
+    DOWN = auto()
+    LAT = auto()
+
+
+class InflowEntryType(Enum):
+    DISTR = auto()
+    DENSITY = auto()
+    SPECIFY = auto()
+
+
+class DYNGTC(Enum):
+    B = auto()
+    ZGT = auto()
+    FLOW = auto()
 
 
 class BaseInput(ABC):
@@ -16,12 +96,12 @@ class BaseInput(ABC):
 
     @classmethod
     @abstractmethod
-    def from_file(cls, file: PathLike) -> Self:
+    def from_file(cls, filename: PathLike) -> Self:
         """Parse a data file to a python object.
 
         Parameters
         ----------
-        file : PathLike
+        filename : PathLike
             Path to the data file
 
         Returns
@@ -297,3 +377,391 @@ class ProfileInput(BaseInput):
                 .flatten()
             )
             yield name, data
+
+
+@dataclass(kw_only=True)
+class W2Con(BaseInput):
+    title: str  # Only written to the output of the SNP file
+
+    # Grid dimensions
+    nwb: int
+    nbr: int
+    imx: int
+    kmx: int
+    nproc: int
+    closec: bool
+
+    # Inflow/outflow dimensions
+    ntr: int
+    nst: int
+    niw: int
+    nwd: int
+    ngt: int
+    nsp: int
+    npi: int
+    npu: int
+
+    # Constituents
+    ngc: int
+    nss: int
+    nal: int
+    nep: int
+    nbod: int
+    nmc: int
+    nzp: int
+
+    # Miscellaneous
+    nday: int
+    selectc: str
+    habitatc: bool
+    envirpc: bool
+    aeratec: bool
+    inituwl: bool
+    orcc: bool
+    sed_diag: bool
+
+    # Time control
+    tmstrt: float
+    tmend: float
+    year: int
+
+    # Timestep control
+    ndt: int
+    dltmin: float
+    dltintr: bool
+
+    # Timestep date
+    dltd: float
+
+    # Maximum timestep
+    dltmax: float
+
+    # Timestep fraction
+    dltf: float
+
+    # Timestep limitations
+    visc: bool
+    celc: bool
+    dltadd: bool
+
+    # Branch geometry
+    us: int
+    ds: int
+    uhs: int
+    dhs: int
+    nlmin: int
+    slope: float
+    slopec: float
+
+    # Waterbody definition
+    lat: float
+    long: float
+    ebot: float
+    bs: int
+    be: int
+    jbdn: int
+
+    # Initial conditions
+    t2i: float
+    icethi: float
+    wtypec: WTYPEC
+    gridc: GRIDC
+
+    # Calculations
+    vbc: bool = True
+    ebc: bool = True
+    mbc: bool = True
+    pqc: bool = False
+    evc: bool = True
+    prc: bool = False
+
+    # Dead sea
+    windc: bool = True
+    qinc: bool = True
+    qoutc: bool = True
+    heatc: bool = True
+
+    # Interpolation
+    qinic: bool = True
+    dtric: bool = True
+    hdic: bool = True
+
+    # Heat exchange
+    slhtc: SLHTC = SLHTC.TERM
+    sroc: bool = False
+    rhevap: bool = False
+    metic: bool = True
+    fetchc: bool = False
+    afw: float = 9.2
+    bfw: float = 0.46
+    cfw: float = 2.0
+    windh: float
+
+    # Ice cover
+    icec: ICEC = ICEC.OFF
+    slicec: SLICEC = SLICEC.DETAIL
+    albedo: float = 0.25
+    hwi: float = 10.0
+    betai: float = 0.6
+    gammai: float = 0.07
+    icemin: float = 0.05
+    icet2: float = 3.0
+
+    # Transport scheme
+    sltrc: SLTRC = SLTRC.ULTIMATE
+    theta: float = 0.55
+
+    # Hydraulic coefficients
+    ax: float = 1.0
+    dx: float = 1.0
+    cbhe: float = 0.3
+    tsed: float
+    fi: float = 0.01
+    tsedf: float = 1.0
+    fricc: FRICC = FRICC.CHEZY
+    z0: float = 0.001
+
+    # Vertical Eddy Viscosity
+    azc: AZC = AZC.TKE
+    azslc: AZSLC = AZSLC.IMP
+    azmax: float = 1.0
+    fbc: int = 3
+    e: float = 9.535
+    arodi: float = 0.431
+    strcklr: float = 24.0
+    boundfr: float = 10.0
+    tkecal: TKECAL = TKECAL.IMP
+
+    # Number of structures
+    nstr: int
+    dynstruc: bool
+
+    # Structure interpolation
+    stric: bool = False
+
+    # Structure top selective withdrawal limit
+    ktstr: int
+
+    # Structure bottom selective withdrawal liimit
+    kbstr: int
+
+    # Sink type
+    sinkc: SINKC = SINKC.POINT
+
+    # Structure elevation
+    estr: float
+
+    # Structure width
+    wstr: float
+
+    # Pipes
+    iupi: int
+    idpi: int
+    eupi: float
+    edpi: float
+    wpi: float
+    dlxpi: float
+    fpi: float
+    fminpi: float
+    latpic: WithdrawalType
+    dynpipe: bool
+
+    # Upstream pipe
+    pupic: InflowEntryType = InflowEntryType.DISTR
+    etupi: float
+    ebupi: float
+    ktupi: int
+    kbupi: int
+
+    # Downstream pipe
+    pdpic: InflowEntryType = InflowEntryType.DISTR
+    etdpi: float
+    ebdpi: float
+    ktdpi: int
+    kbdpi: int
+
+    # Spillways
+    iusp: int
+    idsp: int
+    esp: float
+    a1sp: float
+    b1sp: float
+    a2sp: float
+    b2sp: float
+    latspc: WithdrawalType
+
+    # Upstream spillways
+    puspc: InflowEntryType = InflowEntryType.DISTR
+    etusp: float
+    ebusp: float
+    ktusp: int
+    kbusp: int
+
+    # Downstream spillways
+    pdspc: InflowEntryType = InflowEntryType.DISTR
+    etdsp: float
+    ebdsp: float
+    ktdsp: int
+    kbdsp: int
+
+    # Spillway dissolved gas
+    gasspc: bool = False
+    eqsp: int
+    asp: float
+    bsp: float
+    csp: float
+
+    # Gates
+    iugt: int
+    idgt: int
+    egt: float
+    a1gt: float
+    b1gt: float
+    g1gt: float
+    a2gt: float
+    b2gt: float
+    g2gt: float
+    latgtc: WithdrawalType
+
+    # Gate weir
+    ga1: float
+    gb1: float
+    ga2: float
+    gb2: float
+    dyngtc: DYNGTC
+    gtic: bool
+
+    # Upstream gate
+    pugtc: InflowEntryType = InflowEntryType.DISTR
+    etugt: float
+    ebugt: float
+    ktugt: int
+    kbugt: int
+
+    # Downstream gate
+    pdgtc: InflowEntryType = InflowEntryType.DISTR
+    etdgt: float
+    ebdgt: float
+    ktdgt: int
+    kbdgt: int
+
+    # Gate dissolved gas
+    gasgtc: bool = False
+    eqgt: int
+    agasgt: float
+    bgasgt: float
+    cgasgt: float
+
+    # Pumps 1
+    iupu: int
+    idpu: int
+    epu: float
+    strtpu: float
+    endpu: float
+    eonpu: float
+    eoffpu: float
+    qpu: float
+    latpuc: WithdrawalType = WithdrawalType.DOWN
+    dynpump: bool = False
+
+    # Pumps 2
+    ppuc: InflowEntryType = InflowEntryType.DISTR
+    etpu: float
+    ebpu: float
+    ktpu: int
+    kbpu: int
+
+    # Internal weir segment location
+    iwr: int
+
+    # Internal weir top layer
+    ektwr: float
+
+    # Internal weir bottom layer
+    ekbwr: float
+
+    # Withdrawal interpolation
+    wdic: bool = False
+
+    # Withdrawal segment
+    iwd: int
+
+    # Withdrawal elevation
+    ewd: float
+
+    # Withdrawal top layer
+    ktwd: int
+
+    # Withdrawal bottom layer
+    kbwd: int
+
+    # Tributary inflow placement
+    trc: InflowEntryType
+
+    # Tributary interpolation
+    tric: bool = True
+
+    # Tributary segment
+    itr: int
+
+    # Tributary inflow top elevation
+    etrt: float
+
+    # Tributary inflow bottom elevation
+    etrb: float
+
+    # Distributed tributaries
+    dtrc: bool = False
+
+    # Hydrodynamic output control
+    hprwbc: bool = False
+
+    # Snapshot print
+    snpc: bool = False
+    nsnp: int
+    nisnp: int
+
+    # Snapshot dates
+    snpd: float
+
+    # Snapshot frequency
+    snpf: float
+
+    # Snapshot segments
+    isnp: int
+
+    # Screen print
+    scrc: bool = False
+    nscr: int
+
+    # Screen dates
+    scrd: float
+
+    # Screen frequency
+    scrf: float
+
+    # Profile plot
+    prfc: bool = False
+    nprf: int
+    niprf: int
+
+    # Profile date
+    prfd: float
+
+    # Profile frequency
+    prff: float
+
+    # Profile segment
+    iprf: int
+
+    # Page 100...
+
+    def __getattr__(self, name: str) -> Any:  # noqa: ANN401
+        return super().__getattribute__(self, name.upper())
+
+    @classmethod
+    def from_file(cls, filename: PathLike) -> Self:
+        if Path(filename).suffix != ".csv":
+            raise NotImplementedError
+
+        return cls()
