@@ -12,8 +12,17 @@ from typing import Any, Self
 import pandas as pd
 
 from .subconfig import (
+    Constituents,
     GridDimensions,
+    InflowOutflowDimensions,
+    MaximumTimestep,
+    Miscellaneous,
     SubConfig,
+    TimeControl,
+    TimestepControl,
+    TimestepDate,
+    TimestepFraction,
+    TimestepLimitations,
     Title,
 )
 
@@ -389,6 +398,15 @@ class W2Con(BaseInput):
     __subconfigs__ = [
         Title,
         GridDimensions,
+        InflowOutflowDimensions,
+        Constituents,
+        Miscellaneous,
+        TimeControl,
+        TimestepControl,
+        TimestepDate,
+        MaximumTimestep,
+        TimestepFraction,
+        TimestepLimitations,
     ]
 
     def __getattr__(self, name: str) -> Any:  # noqa: ANN401
@@ -396,14 +414,34 @@ class W2Con(BaseInput):
 
     @classmethod
     def from_file(cls, filename: PathLike) -> Self:
+        """Parse a w2_con.csv file into a W2Con instance.
+
+        Parameters
+        ----------
+        filename : PathLike
+            Path to the w2_con.csv configuration file
+
+        Returns
+        -------
+        Self
+            A W2Con instance populated with the configuration read from the file
+        """
         if Path(filename).suffix != ".csv":
             raise NotImplementedError
 
         with open(filename) as f:
             lines = f.readlines()
 
+        # Skip over (undocumented) extra header lines  to find the title card of the
+        # file
+        i = 0
+        while not lines[i].startswith("Title"):
+            i += 1
+
+        lines = lines[i:]
+
         configs = []
-        for subconfig in cls.subconfigs:
+        for subconfig in cls.__subconfigs__:
             config, lines = subconfig.parse(lines)
             configs.append(config)
 

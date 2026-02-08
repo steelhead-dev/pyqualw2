@@ -1,14 +1,18 @@
-from typing import Self
 import warnings
-from typing import Any
+from collections import defaultdict
+from typing import Any, Self
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import Field, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 type ParseResult = tuple[Self, list[str]]
 
 
-class SubConfig(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+class SubConfig(BaseSettings):
+    model_config = SettingsConfigDict(
+        extra="ignore",
+        env_prefix="PYQUALW2_"
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -29,11 +33,117 @@ class SubConfig(BaseModel):
         args = set(values.keys())
         extra = args - fields
         if extra:
-            warnings.warn(f"Extra fields passed to {cls.__name__}: {extra}")
+            warnings.warn(
+                f"Extra fields passed to {cls.__name__}: {extra}",
+                stacklevel=1
+            )
         return values
 
+    @classmethod
     def parse(cls, lines: list[str]) -> ParseResult:
         pass
+
+    @classmethod
+    def parse_line_pair_table(cls, lines: list[str]) -> ParseResult:
+        """Parse a pair of lines that form a table of attributes.
+
+        For example, if `lines` contains
+
+            NWB, NBR, IMX, KMX, NPROC, CLOSEC,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+            1,4,46,212,1,OFF     ,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+             ,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+
+        then `SubConfig.parse_line_pair_table(lines)` will generate a dictionary
+
+            {
+                "nwb": "1",
+                "nbr": "4",
+                "imx": "46",
+                "kmx": "212",
+                "nproc": "1",
+                "closec": "off",
+            }
+
+        and attempt to instantiate a SubConfig with this dict passed in as kwargs.
+
+        Parameters
+        ----------
+        lines : list[str]
+            List of lines to ingest; only the first 3 will be consumed
+
+        Returns
+        -------
+        ParseResult
+            A SubConfig subclass instance, and remaining unparsed lines from the config
+        """
+        kwargs = {}
+        for key, value in zip(lines[0].split(","), lines[1].split(","), strict=True):
+            if key != '' and value != '':
+                kwargs[key.strip().lower()] = value.strip()
+            else:
+                break
+        return cls(**kwargs), lines[3:]
+
+    @classmethod
+    def parse_line_pair_single_list(cls, lines: list[str]) -> ParseResult:
+        """Parse a pair of lines containing a list of values for a single attribute.
+
+        For example, if `lines` contains
+
+            DLTF,DLTF,DLTF,DLTF,DLTF,DLTF,DLTF,DLTF,DLTF,DLTF,,,,,,,,,,,,,,,,,,,,,,
+            0.9,0.6,0.9,0.6,0.9,,,,,,,,,,,,,,,,,,,,,,,,,,,
+             ,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+            ...
+
+        then `SubConfig.parse_line_pair_single_list(lines)` will generate a dictionary
+
+            {"dltf": ['0.9', '0.6', '0.9', '0.6', '0.9']}
+
+        and attempt to instantiate a SubConfig with this dict passed in as kwargs.
+
+
+        Parameters
+        ----------
+        lines : list[str]
+            The lines to ingest; only the first 3 will be consumed
+
+        Returns
+        -------
+        ParseResult
+            A SubConfig subclass instance, and remaining unparsed lines from the config
+        """
+        name = lines[0].split(",")[0].strip().lower()
+        values = []
+        for value in lines[1].split(","):
+            if value != '':
+                values.append(value)
+            else:
+                break
+
+        return cls(**{name: values}), lines[3:]
+
+    def parse_matrix(cls, lines: list[str]) -> ParseResult:
+
+        fields = cls.model_fields().keys()
+
+        i = 0
+        kwargs = defaultdict(list)
+        for line in enumerate(lines[1:]):
+            split = line.strip().split(',')
+            if split[0] == '':
+                break
+
+            for value in split:
+                if value == '':
+                    break
+                kwargs[fields[i]].append(value)
+
+            i += 1
+
+
+        return cls(**kwargs), lines[i:]
+
+
 
 
 class Title(SubConfig):
@@ -54,10 +164,7 @@ class GridDimensions(SubConfig):
 
     @classmethod
     def parse(cls, lines: list[str]) -> ParseResult:
-        kwargs = {}
-        for key, value in zip(lines[0].split(","), lines[1].split(","), strict=True):
-            kwargs[key] = value
-        return cls(**kwargs), lines[2:]
+        return cls.parse_line_pair_table(lines)
 
 
 class InflowOutflowDimensions(SubConfig):
@@ -72,10 +179,7 @@ class InflowOutflowDimensions(SubConfig):
 
     @classmethod
     def parse(cls, lines: list[str]) -> ParseResult:
-        kwargs = {}
-        for key, value in zip(lines[0].split(","), lines[1].split(","), strict=True):
-            kwargs[key] = value
-        return cls(**kwargs), lines[2:]
+        return cls.parse_line_pair_table(lines)
 
 
 class Constituents(SubConfig):
@@ -89,10 +193,7 @@ class Constituents(SubConfig):
 
     @classmethod
     def parse(cls, lines: list[str]) -> ParseResult:
-        kwargs = {}
-        for key, value in zip(lines[0].split(","), lines[1].split(","), strict=True):
-            kwargs[key] = value
-        return cls(**kwargs), lines[2:]
+        return cls.parse_line_pair_table(lines)
 
 
 class Miscellaneous(SubConfig):
@@ -107,10 +208,7 @@ class Miscellaneous(SubConfig):
 
     @classmethod
     def parse(cls, lines: list[str]) -> ParseResult:
-        kwargs = {}
-        for key, value in zip(lines[0].split(","), lines[1].split(","), strict=True):
-            kwargs[key] = value
-        return cls(**kwargs), lines[2:]
+        return cls.parse_line_pair_table(lines)
 
 
 class TimeControl(SubConfig):
@@ -120,23 +218,18 @@ class TimeControl(SubConfig):
 
     @classmethod
     def parse(cls, lines: list[str]) -> ParseResult:
-        kwargs = {}
-        for key, value in zip(lines[0].split(","), lines[1].split(","), strict=True):
-            kwargs[key] = value
-        return cls(**kwargs), lines[2:]
+        return cls.parse_line_pair_table(lines)
 
 
 class TimestepControl(SubConfig):
-    ndt: int
+    # NDT in the docs, NDLT in w2_con.csv
+    ndt: int = Field(alias="ndlt")
     dltmin: float
     dltintr: bool
 
     @classmethod
     def parse(cls, lines: list[str]) -> ParseResult:
-        kwargs = {}
-        for key, value in zip(lines[0].split(","), lines[1].split(","), strict=True):
-            kwargs[key] = value
-        return cls(**kwargs), lines[2:]
+        return cls.parse_line_pair_table(lines)
 
 
 class TimestepDate(SubConfig):
@@ -144,8 +237,7 @@ class TimestepDate(SubConfig):
 
     @classmethod
     def parse(cls, lines: list[str]) -> ParseResult:
-        res = [val for val in lines[1].split(",") if val != ""]
-        return cls(dltd=res), lines[2:]
+        return cls.parse_line_pair_single_list(lines)
 
 
 class MaximumTimestep(SubConfig):
@@ -153,8 +245,7 @@ class MaximumTimestep(SubConfig):
 
     @classmethod
     def parse(cls, lines: list[str]) -> ParseResult:
-        res = [val for val in lines[1].split(",") if val != ""]
-        return cls(dltmax=res), lines[2:]
+        return cls.parse_line_pair_single_list(lines)
 
 
 class TimestepFraction(SubConfig):
@@ -162,14 +253,13 @@ class TimestepFraction(SubConfig):
 
     @classmethod
     def parse(cls, lines: list[str]) -> ParseResult:
-        res = [val for val in lines[1].split(",") if val != ""]
-        return cls(dltf=res), lines[2:]
+        return cls.parse_line_pair_single_list(lines)
 
 
 class TimestepLimitations(SubConfig):
-    visc: bool
-    celc: bool
-    dltadd: bool
+    visc: list[bool]
+    celc: list[bool]
+    dltadd: list[bool]
 
     @classmethod
     def parse(cls, lines: list[str]) -> ParseResult:
@@ -177,11 +267,9 @@ class TimestepLimitations(SubConfig):
             visc=lines[1].split(",")[0],
             celc=lines[2].split(",")[0],
             dltadd=lines[3].split(",")[0],
-        )
+        ), lines[4:]
 
 
-# # TODO
-#
 # class Branch geometry(SubConfig):
 #     us: int
 #     ds: int
