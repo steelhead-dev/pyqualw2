@@ -1,11 +1,50 @@
 import warnings
 from collections import defaultdict
+from textwrap import indent
 from typing import Any, Self
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-type ParseResult = tuple[Self, list[str]]
+from .options import (
+    AZC,
+    DYNGTC,
+    FRICC,
+    GRIDC,
+    ICEC,
+    SINKC,
+    SLHTC,
+    SLICEC,
+    SLTRC,
+    WTYPEC,
+    ImplicitExplicit,
+    InflowEntryType,
+    WithdrawalType,
+)
+
+type ParseResult = tuple[Self, int]
+
+
+class ParseError(Exception):
+    def __init__(self, lines, lineno, message=""):
+        nlines = len(lines)
+        snippet = (
+            indent(
+                "".join(lines[max(0, lineno - 10) : min(nlines, lineno)]),
+                prefix="    ",
+            )
+            + indent(
+                lines[lineno],
+                prefix="--> ",
+            )
+            + indent(
+                "".join(lines[min(nlines, lineno + 1) : min(nlines, lineno + 10)]),
+                prefix="    ",
+            )
+        )
+        super().__init__(
+            f"Problem parsing line {lineno}: {message}\n\n{snippet}",
+        )
 
 
 class SubConfig(BaseSettings):
@@ -47,11 +86,11 @@ class SubConfig(BaseSettings):
         return values
 
     @classmethod
-    def parse(cls, lines: list[str]) -> ParseResult:
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
         pass
 
     @classmethod
-    def parse_line_pair_table(cls, lines: list[str]) -> ParseResult:
+    def parse_line_pair_table(cls, lines: list[str], i: int) -> ParseResult:
         """Parse a pair of lines that form a table of attributes.
 
         For example, if `lines` contains
@@ -60,7 +99,7 @@ class SubConfig(BaseSettings):
             1,4,46,212,1,OFF     ,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
              ,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
 
-        then `SubConfig.parse_line_pair_table(lines)` will generate a dictionary
+        then `SubConfig.parse_line_pair_table(lines, i)` will generate a dictionary
 
             {
                 "nwb": "1",
@@ -84,73 +123,98 @@ class SubConfig(BaseSettings):
             A SubConfig subclass instance, and remaining unparsed lines from the config
         """
         kwargs = {}
-        for key, value in zip(lines[0].split(","), lines[1].split(","), strict=True):
+        for key, value in zip(
+            lines[i].split(","), lines[i + 1].split(","), strict=True
+        ):
             if key != "" and value != "":
                 kwargs[key.strip().lower()] = value.strip()
             else:
                 break
-        return cls(**kwargs), lines[3:]
+
+        try:
+            return cls(**kwargs), i + 3
+        except Exception as e:
+            raise ParseError(lines, i) from e
 
     @classmethod
-    def parse_line_pair_single_list(cls, lines: list[str]) -> ParseResult:
-        """Parse a pair of lines containing a list of values for a single attribute.
+    def parse_row_variables(cls, lines: list[str], i: int) -> ParseResult:
+        """Parse a matrix of values into one or more lists of values.
 
-        For example, if `lines` contains
+        Each column represents some configuration object. For example, consider the
+        BranchGeometry section:
 
-            DLTF,DLTF,DLTF,DLTF,DLTF,DLTF,DLTF,DLTF,DLTF,DLTF,,,,,,,,,,,,,,,,,,,,,,
-            0.9,0.6,0.9,0.6,0.9,,,,,,,,,,,,,,,,,,,,,,,,,,,
-             ,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-            ...
+            BR1,BR2,BR3,BR4,BR5,BR6,BR7,BR8,BR9,BR10,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+            2,34,39,44,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+            31,36,41,45,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+            0,0,0,0,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+            0,21,27,28,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+            1,1,1,1,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+            0,0,0,0,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+            0,0,0,0,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+             ,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
 
-        then `SubConfig.parse_line_pair_single_list(lines)` will generate a dictionary
+        In this subsection, each column represents a separate branch representing a
+        sloping river section that is linked in series. Each row corresponds to a
+        separate configuration variable for the branch, so in the example above there
+        are 4 branches. The first branch has values
 
-            {"dltf": ['0.9', '0.6', '0.9', '0.6', '0.9']}
+            US: 2
+            DS: 31
+            UHS: 0
+            DHS: 0
+            NLMIN: 1
+            SLOPE: 0
+            SLOPEC: 0
 
-        and attempt to instantiate a SubConfig with this dict passed in as kwargs.
-
+        And so on for the other branches.
 
         Parameters
         ----------
         lines : list[str]
-            The lines to ingest; only the first 3 will be consumed
+            The lines to ingest
 
         Returns
         -------
         ParseResult
-            A SubConfig subclass instance, and remaining unparsed lines from the config
+            A SubConfig subclass instance, and the remaining lines from the config
+
         """
-        name = lines[0].split(",")[0].strip().lower()
-        values = []
-        for value in lines[1].split(","):
-            if value != "":
-                values.append(value)
-            else:
-                break
-
-        return cls(**{name: values}), lines[3:]
-
-    @classmethod
-    def parse_matrix(cls, lines: list[str]) -> ParseResult:
         fields = list(cls.model_fields.keys())
 
-        i = 0
+        j = 0
         kwargs = defaultdict(list)
-        for line in lines[1:]:
+        for line in lines[i + 1 :]:
             split = line.strip().split(",")
             if split[0] == "":
+                # Hit an empty line, signifying the end of a configuration block
                 break
 
             for value in split:
                 value = value.strip()
                 if value == "":
+                    # Hit the end of the data in a line. Continue to the next line
                     break
-                kwargs[fields[i]].append(value)
 
-            i += 1
+                if j < len(fields):
+                    kwargs[fields[j]].append(value)
+                else:
+                    warnings.warn(
+                        (
+                            "Encountered more configuration settings than there are "
+                            f"expected fields on line {j + i + 1}. Skipping."
+                        ),
+                        stacklevel=1,
+                    )
+                    break
+
+            j += 1
 
         # Skip one line for each line consumed, one line for the section header, and one
         # for the empty line after the section
-        return cls(**kwargs), lines[i + 2 :]
+        try:
+            return cls(**kwargs), j + i + 2
+        except Exception as e:
+            raise ParseError(lines, i) from e
 
     def __contains__(self, name: str) -> bool:
         """Return true if the given name exists as an attribute on the class.
@@ -172,8 +236,8 @@ class Title(SubConfig):
     title: str
 
     @classmethod
-    def parse(cls, lines: list[str]) -> ParseResult:
-        return cls(title="\n".join(lines[1:11])), lines[12:]
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls(title="\n".join(lines[i : i + 10])), i + 12
 
 
 class GridDimensions(SubConfig):
@@ -185,8 +249,8 @@ class GridDimensions(SubConfig):
     closec: bool
 
     @classmethod
-    def parse(cls, lines: list[str]) -> ParseResult:
-        return cls.parse_line_pair_table(lines)
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_line_pair_table(lines, i)
 
 
 class InflowOutflowDimensions(SubConfig):
@@ -200,8 +264,8 @@ class InflowOutflowDimensions(SubConfig):
     npu: int
 
     @classmethod
-    def parse(cls, lines: list[str]) -> ParseResult:
-        return cls.parse_line_pair_table(lines)
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_line_pair_table(lines, i)
 
 
 class Constituents(SubConfig):
@@ -214,8 +278,8 @@ class Constituents(SubConfig):
     nzp: int
 
     @classmethod
-    def parse(cls, lines: list[str]) -> ParseResult:
-        return cls.parse_line_pair_table(lines)
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_line_pair_table(lines, i)
 
 
 class Miscellaneous(SubConfig):
@@ -229,8 +293,8 @@ class Miscellaneous(SubConfig):
     sed_diag: bool
 
     @classmethod
-    def parse(cls, lines: list[str]) -> ParseResult:
-        return cls.parse_line_pair_table(lines)
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_line_pair_table(lines, i)
 
 
 class TimeControl(SubConfig):
@@ -239,8 +303,8 @@ class TimeControl(SubConfig):
     year: int
 
     @classmethod
-    def parse(cls, lines: list[str]) -> ParseResult:
-        return cls.parse_line_pair_table(lines)
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_line_pair_table(lines, i)
 
 
 class TimestepControl(SubConfig):
@@ -249,32 +313,32 @@ class TimestepControl(SubConfig):
     dltintr: bool = Field(alias="dltinter")
 
     @classmethod
-    def parse(cls, lines: list[str]) -> ParseResult:
-        return cls.parse_line_pair_table(lines)
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_line_pair_table(lines, i)
 
 
 class TimestepDate(SubConfig):
     dltd: list[float]
 
     @classmethod
-    def parse(cls, lines: list[str]) -> ParseResult:
-        return cls.parse_line_pair_single_list(lines)
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_row_variables(lines, i)
 
 
 class MaximumTimestep(SubConfig):
     dltmax: list[float]
 
     @classmethod
-    def parse(cls, lines: list[str]) -> ParseResult:
-        return cls.parse_line_pair_single_list(lines)
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_row_variables(lines, i)
 
 
 class TimestepFraction(SubConfig):
     dltf: list[float]
 
     @classmethod
-    def parse(cls, lines: list[str]) -> ParseResult:
-        return cls.parse_line_pair_single_list(lines)
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_row_variables(lines, i)
 
 
 class TimestepLimitations(SubConfig):
@@ -283,118 +347,170 @@ class TimestepLimitations(SubConfig):
     dltadd: list[bool]
 
     @classmethod
-    def parse(cls, lines: list[str]) -> ParseResult:
-        return cls.parse_matrix(lines)
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_row_variables(lines, i)
 
 
-# class Branch geometry(SubConfig):
-#     us: int
-#     ds: int
-#     uhs: int
-#     dhs: int
-#     nlmin: int
-#     slope: float
-#     slopec: float
-#
-#
-# class Waterbody definition(SubConfig):
-#     lat: float
-#     long: float
-#     ebot: float
-#     bs: int
-#     be: int
-#     jbdn: int
-#
-#
-# class Initial conditions(SubConfig):
-#     t2i: float
-#     icethi: float
-#     wtypec: WTYPEC
-#     gridc: GRIDC
-#
-#
-# class Calculations(SubConfig):
-#     vbc: bool = True
-#     ebc: bool = True
-#     mbc: bool = True
-#     pqc: bool = False
-#     evc: bool = True
-#     prc: bool = False
-#
-#
-# class Dead sea(SubConfig):
-#     windc: bool = True
-#     qinc: bool = True
-#     qoutc: bool = True
-#     heatc: bool = True
-#
-#
-# class Interpolation(SubConfig):
-#     qinic: bool = True
-#     dtric: bool = True
-#     hdic: bool = True
-#
-#
-# class Heat exchange(SubConfig):
-#     slhtc: SLHTC = SLHTC.TERM
-#     sroc: bool = False
-#     rhevap: bool = False
-#     metic: bool = True
-#     fetchc: bool = False
-#     afw: float = 9.2
-#     bfw: float = 0.46
-#     cfw: float = 2.0
-#     windh: float
-#
-#
-# class Ice cover(SubConfig):
-#     icec: ICEC = ICEC.OFF
-#     slicec: SLICEC = SLICEC.DETAIL
-#     albedo: float = 0.25
-#     hwi: float = 10.0
-#     betai: float = 0.6
-#     gammai: float = 0.07
-#     icemin: float = 0.05
-#     icet2: float = 3.0
-#
-#
-# class Transport scheme(SubConfig):
-#     sltrc: SLTRC = SLTRC.ULTIMATE
-#     theta: float = 0.55
-#
-#
-# class Hydraulic coefficients(SubConfig):
-#     ax: float = 1.0
-#     dx: float = 1.0
-#     cbhe: float = 0.3
-#     tsed: float
-#     fi: float = 0.01
-#     tsedf: float = 1.0
-#     fricc: FRICC = FRICC.CHEZY
-#     z0: float = 0.001
-#
-#
-# class Vertical Eddy Viscosity(SubConfig):
-#     azc: AZC = AZC.TKE
-#     azslc: AZSLC = AZSLC.IMP
-#     azmax: float = 1.0
-#     fbc: int = 3
-#     e: float = 9.535
-#     arodi: float = 0.431
-#     strcklr: float = 24.0
-#     boundfr: float = 10.0
-#     tkecal: TKECAL = TKECAL.IMP
-#
-#
-# class Number of structures(SubConfig):
-#     nstr: int
-#     dynstruc: bool
-#
-#
-# class Structure interpolation(SubConfig):
-#     stric: bool = False
-#
-#
+class BranchGeometry(SubConfig):
+    us: list[int]
+    ds: list[int]
+    uhs: list[int]
+    dhs: list[int]
+    nlmin: list[int]
+    slope: list[float]
+    slopec: list[float]
+
+    @classmethod
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_row_variables(lines, i)
+
+
+class WaterbodyDefinition(SubConfig):
+    lat: list[float]
+    long: list[float]
+    ebot: list[float]
+    bs: list[int]
+    be: list[int]
+    jbdn: list[int]
+
+    @classmethod
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_row_variables(lines, i)
+
+
+class InitialConditions(SubConfig):
+    t2i: list[float]
+    icethi: list[float]
+    wtypec: list[WTYPEC]
+    gridc: list[GRIDC]
+
+    @classmethod
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_row_variables(lines, i)
+
+
+class Calculations(SubConfig):
+    vbc: list[bool]  # True
+    ebc: list[bool]  # True
+    mbc: list[bool]  # True
+    pqc: list[bool]  # False
+    evc: list[bool]  # True
+    prc: list[bool]  # False
+
+    @classmethod
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_row_variables(lines, i)
+
+
+class DeadSea(SubConfig):
+    windc: list[bool]  # True
+    qinc: list[bool]  # True
+    qoutc: list[bool]  # True
+    heatc: list[bool]  # True
+
+    @classmethod
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_row_variables(lines, i)
+
+
+class Interpolation(SubConfig):
+    qinic: list[bool]  # True
+    dtric: list[bool]  # True
+    hdic: list[bool]  # True
+
+    @classmethod
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_row_variables(lines, i)
+
+
+class HeatExchange(SubConfig):
+    slhtc: list[SLHTC]  # SLHTC.TERM
+    sroc: list[bool]  # False
+    rhevap: list[bool]  # False
+    metic: list[bool]  # True
+    fetchc: list[bool]  # False
+    afw: list[float]  # 9.2
+    bfw: list[float]  # 0.46
+    cfw: list[float]  # 2.0
+    windh: list[float]
+
+    @classmethod
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_row_variables(lines, i)
+
+
+class IceCover(SubConfig):
+    icec: list[ICEC]  # ICEC.OFF
+    slicec: list[SLICEC]  # SLICEC.DETAIL
+    albedo: list[float]  # 0.25
+    hwi: list[float]  # 10.0
+    betai: list[float]  # 0.6
+    gammai: list[float]  # 0.07
+    icemin: list[float]  # 0.05
+    icet2: list[float]  # 3.0
+
+    @classmethod
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_row_variables(lines, i)
+
+
+class TransportScheme(SubConfig):
+    sltrc: list[SLTRC]  # SLTRC.ULTIMATE
+    theta: list[float]  # 0.55
+
+    @classmethod
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_row_variables(lines, i)
+
+
+class HydraulicCoefficients(SubConfig):
+    ax: list[float]  # 1.0
+    dx: list[float]  # 1.0
+    cbhe: list[float]  # 0.3
+    tsed: list[float]
+    fi: list[float]  # 0.01
+    tsedf: list[float]  # 1.0
+    fricc: list[FRICC]  # FRICC.CHEZY
+    z0: list[float]  # 0.001
+
+    @classmethod
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_row_variables(lines, i)
+
+
+class VerticalEddyViscosity(SubConfig):
+    azc: list[AZC]  # AZC.TKE
+    azslc: list[ImplicitExplicit]  # AZSLC.IMP
+    azmax: list[float]  # 1.0
+    fbc: list[int]  # 3
+    e: list[float]  # 9.535
+    arodi: list[float]  # 0.431
+    strcklr: list[float]  # 24.0
+    boundfr: list[float]  # 10.0
+    tkecal: list[ImplicitExplicit]  # TKECAL.IMP
+
+    @classmethod
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_row_variables(lines, i)
+
+
+class NumberOfStructures(SubConfig):
+    nstr: list[int]
+    dynstruc: list[bool]
+
+    @classmethod
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_row_variables(lines, i)
+
+
+class StructureInterpolation(SubConfig):
+    stric: list[bool]  # False
+
+    @classmethod
+    def parse(cls, lines: list[str], i: int) -> ParseResult:
+        return cls.parse_row_variables(lines, i)
+
+
 # class Structure top selective withdrawal limit(SubConfig):
 #     ktstr: int
 #
@@ -404,7 +520,7 @@ class TimestepLimitations(SubConfig):
 #
 #
 # class Sink type(SubConfig):
-#     sinkc: SINKC = SINKC.POINT
+#     sinkc: SINKC # SINKC.POINT
 #
 #
 # class Structure elevation(SubConfig):
@@ -429,7 +545,7 @@ class TimestepLimitations(SubConfig):
 #
 #
 # class Upstream pipe(SubConfig):
-#     pupic: InflowEntryType = InflowEntryType.DISTR
+#     pupic: InflowEntryType # InflowEntryType.DISTR
 #     etupi: float
 #     ebupi: float
 #     ktupi: int
@@ -437,7 +553,7 @@ class TimestepLimitations(SubConfig):
 #
 #
 # class Downstream pipe(SubConfig):
-#     pdpic: InflowEntryType = InflowEntryType.DISTR
+#     pdpic: InflowEntryType # InflowEntryType.DISTR
 #     etdpi: float
 #     ebdpi: float
 #     ktdpi: int
@@ -456,7 +572,7 @@ class TimestepLimitations(SubConfig):
 #
 #
 # class Upstream spillways(SubConfig):
-#     puspc: InflowEntryType = InflowEntryType.DISTR
+#     puspc: InflowEntryType # InflowEntryType.DISTR
 #     etusp: float
 #     ebusp: float
 #     ktusp: int
@@ -464,7 +580,7 @@ class TimestepLimitations(SubConfig):
 #
 #
 # class Downstream spillways(SubConfig):
-#     pdspc: InflowEntryType = InflowEntryType.DISTR
+#     pdspc: InflowEntryType # InflowEntryType.DISTR
 #     etdsp: float
 #     ebdsp: float
 #     ktdsp: int
@@ -472,7 +588,7 @@ class TimestepLimitations(SubConfig):
 #
 #
 # class Spillway dissolved gas(SubConfig):
-#     gasspc: bool = False
+#     gasspc: bool # False
 #     eqsp: int
 #     asp: float
 #     bsp: float
@@ -502,7 +618,7 @@ class TimestepLimitations(SubConfig):
 #
 #
 # class Upstream gate(SubConfig):
-#     pugtc: InflowEntryType = InflowEntryType.DISTR
+#     pugtc: InflowEntryType # InflowEntryType.DISTR
 #     etugt: float
 #     ebugt: float
 #     ktugt: int
@@ -510,7 +626,7 @@ class TimestepLimitations(SubConfig):
 #
 #
 # class Downstream gate(SubConfig):
-#     pdgtc: InflowEntryType = InflowEntryType.DISTR
+#     pdgtc: InflowEntryType # InflowEntryType.DISTR
 #     etdgt: float
 #     ebdgt: float
 #     ktdgt: int
@@ -518,7 +634,7 @@ class TimestepLimitations(SubConfig):
 #
 #
 # class Gate dissolved gas(SubConfig):
-#     gasgtc: bool = False
+#     gasgtc: bool # False
 #     eqgt: int
 #     agasgt: float
 #     bgasgt: float
@@ -534,12 +650,12 @@ class TimestepLimitations(SubConfig):
 #     eonpu: float
 #     eoffpu: float
 #     qpu: float
-#     latpuc: WithdrawalType = WithdrawalType.DOWN
-#     dynpump: bool = False
+#     latpuc: WithdrawalType # WithdrawalType.DOWN
+#     dynpump: bool # False
 #
 #
 # class Pumps 2(SubConfig):
-#     ppuc: InflowEntryType = InflowEntryType.DISTR
+#     ppuc: InflowEntryType # InflowEntryType.DISTR
 #     etpu: float
 #     ebpu: float
 #     ktpu: int
@@ -559,7 +675,7 @@ class TimestepLimitations(SubConfig):
 #
 #
 # class Withdrawal interpolation(SubConfig):
-#     wdic: bool = False
+#     wdic: bool # False
 #
 #
 # class Withdrawal segment(SubConfig):
@@ -583,7 +699,7 @@ class TimestepLimitations(SubConfig):
 #
 #
 # class Tributary interpolation(SubConfig):
-#     tric: bool = True
+#     tric: bool # True
 #
 #
 # class Tributary segment(SubConfig):
@@ -599,15 +715,15 @@ class TimestepLimitations(SubConfig):
 #
 #
 # class Distributed tributaries(SubConfig):
-#     dtrc: bool = False
+#     dtrc: bool # False
 #
 #
 # class Hydrodynamic output control(SubConfig):
-#     hprwbc: bool = False
+#     hprwbc: bool # False
 #
 #
 # class Snapshot print(SubConfig):
-#     snpc: bool = False
+#     snpc: bool # False
 #     nsnp: int
 #     nisnp: int
 #
@@ -625,7 +741,7 @@ class TimestepLimitations(SubConfig):
 #
 #
 # class Screen print(SubConfig):
-#     scrc: bool = False
+#     scrc: bool # False
 #     nscr: int
 #
 #
@@ -638,7 +754,7 @@ class TimestepLimitations(SubConfig):
 #
 #
 # class Profile plot(SubConfig):
-#     prfc: bool = False
+#     prfc: bool # False
 #     nprf: int
 #     niprf: int
 #

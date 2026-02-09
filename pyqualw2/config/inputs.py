@@ -3,7 +3,6 @@ import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Generator
 from dataclasses import dataclass
-from enum import Enum, auto
 from io import StringIO
 from os import PathLike
 from pathlib import Path
@@ -12,11 +11,21 @@ from typing import Any, Self
 import pandas as pd
 
 from .subconfig import (
+    BranchGeometry,
+    Calculations,
     Constituents,
+    DeadSea,
     GridDimensions,
+    HeatExchange,
+    HydraulicCoefficients,
+    IceCover,
     InflowOutflowDimensions,
+    InitialConditions,
+    Interpolation,
     MaximumTimestep,
     Miscellaneous,
+    NumberOfStructures,
+    StructureInterpolation,
     SubConfig,
     TimeControl,
     TimestepControl,
@@ -24,86 +33,10 @@ from .subconfig import (
     TimestepFraction,
     TimestepLimitations,
     Title,
+    TransportScheme,
+    VerticalEddyViscosity,
+    WaterbodyDefinition,
 )
-
-
-class WTYPEC(Enum):
-    FRESH = auto()
-    SALT = auto()
-
-
-class GRIDC(Enum):
-    RECT = auto()
-    TRAP = auto()
-
-
-class SLHTC(Enum):
-    TERM = auto()
-    ET = auto()
-
-
-class ICEC(Enum):
-    ON = auto()
-    ONWB = auto()
-    OFF = auto()
-
-
-class SLICEC(Enum):
-    SIMPLE = auto()
-    DETAIL = auto()
-
-
-class SLTRC(Enum):
-    ULTIMATE = auto()
-    QUICKEST = auto()
-    UPWIND = auto()
-
-
-class FRICC(Enum):
-    MANN = auto()
-    CHEZY = auto()
-
-
-class AZC(Enum):
-    NICK = auto()
-    PARAB = auto()
-    RNG = auto()
-    W2 = auto()
-    W2N = auto()
-    TKE = auto()
-    TKE1 = auto()
-
-
-class AZSLC(Enum):
-    IMP = auto()
-    EXP = auto()
-
-
-class TKECAL(Enum):
-    IMP = auto()
-    EXP = auto()
-
-
-class SINKC(Enum):
-    POINT = auto()
-    LINE = auto()
-
-
-class WithdrawalType(Enum):
-    DOWN = auto()
-    LAT = auto()
-
-
-class InflowEntryType(Enum):
-    DISTR = auto()
-    DENSITY = auto()
-    SPECIFY = auto()
-
-
-class DYNGTC(Enum):
-    B = auto()
-    ZGT = auto()
-    FLOW = auto()
 
 
 class BaseInput(ABC):
@@ -412,6 +345,19 @@ class W2Con(BaseInput):
         MaximumTimestep,
         TimestepFraction,
         TimestepLimitations,
+        BranchGeometry,
+        WaterbodyDefinition,
+        InitialConditions,
+        Calculations,
+        DeadSea,
+        Interpolation,
+        HeatExchange,
+        IceCover,
+        TransportScheme,
+        HydraulicCoefficients,
+        VerticalEddyViscosity,
+        NumberOfStructures,
+        StructureInterpolation,
     ]
 
     def __getattr__(self, name: str) -> Any:  # noqa: ANN401
@@ -429,9 +375,9 @@ class W2Con(BaseInput):
         """
         for config in self.configs:
             if name in config:
-                return config.name
+                return getattr(config, name)
 
-        return super().__getattribute__(self, name.lower())
+        return super().__getattribute__(name.lower())
 
     @classmethod
     def from_file(cls, filename: PathLike) -> Self:
@@ -459,11 +405,9 @@ class W2Con(BaseInput):
         while not lines[i].startswith("Title"):
             i += 1
 
-        lines = lines[i:]
-
         configs = []
         for subconfig in cls.__subconfigs__:
-            config, lines = subconfig.parse(lines)
+            config, i = subconfig.parse(lines, i)
             configs.append(config)
 
         return cls(configs)
