@@ -1,8 +1,5 @@
 from os import PathLike
-from pathlib import Path
 from typing import Self
-
-import pandas as pd
 
 from .inputs import BathymetryInput, ProfileInput, W2ConSimpleInput
 
@@ -65,40 +62,3 @@ class Config:
 
         """
         raise NotImplementedError
-
-    @staticmethod
-    def parse_bathymetry(file: PathLike) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """Parse a bathymetry file.
-
-        Parameters
-        ----------
-        file : PathLike
-            Path to a bathymetry file, e.g. mbth_wb1.csv
-
-        Returns
-        -------
-        tuple[pd.DataFrame, pd.DataFrame]
-            The segment metadata and the bathymetry data
-        """
-        if Path(file).suffix != ".csv":
-            raise NotImplementedError
-
-        # Segment metadata. Ignore first two lines:
-        # $Millerton Bathymetry,,,,,,,,,,,...
-        # ,1,2,3,4,5,6,7,8,9,10,11,12,13,...
-        #
-        # but read the next 4 rows, which give per-segment DLX, ELWS, PHI0, and FRIC
-        segments = pd.read_csv(file, index_col=False, skiprows=2, nrows=4, header=None)
-
-        # The values are stored in columns; transpose and update the column names
-        segments = segments.transpose().drop(index=segments.columns[-1]).reset_index()
-        segments.columns = segments.iloc[0]
-        segments = segments.iloc[1:]
-
-        data = pd.read_csv(file, index_col=False, skiprows=7, header=None)
-        data.columns = [f"Layer {i}" for i in range(len(data.columns - 2))] + [
-            "K",
-            "ELEV",
-        ]
-
-        return (segments, data)
