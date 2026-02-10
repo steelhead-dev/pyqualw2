@@ -13,9 +13,9 @@ class ModelRunner:
         for config in self.config_list:
            wd = self.make_wd() 
            self.copy_in_model_files(wd)
-           self.gen_input_files(config)
-           self.run_model
-           self.archvie_model
+           #self.gen_input_files(config)
+           #self.run_model
+           #self.archvie_model
     
 
 
@@ -24,6 +24,7 @@ class ModelRunner:
 
     def copy_in_model_files(self, wd:Path):
 
+        wd = Path(wd)
         src = Path(__file__).parent / 'model_template'
 
         if not src.exists():
