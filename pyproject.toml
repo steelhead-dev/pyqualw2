@@ -1,15 +1,29 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
 [project]
 name = "pyqualw2"
 description = "A CE-QUAL-W2 orchestration toolkit"
 readme = "README.md"
 requires-python = ">=3.13"
-version = "0.0.1"
-
 dependencies = [
     "typer>=0.20",
     "pandas",
-    "rich"
-, "tomli>=2.3.0,<3"]
+    "rich",
+    "tomli>=2.3.0,<3",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+dev = [
+    "prek",
+    "ruff",
+    "python-lsp-server",
+]
+test = [
+    "pytest"
+]
 
 [workspace]
 authors = ["bobo-baggins <urbanecoguard@gmail.com>"]
@@ -18,6 +32,11 @@ name = "pyqualw2"
 platforms = ["linux-64"]
 version = "0.1.0"
 
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pyqualw2"]
 
 [tool.pixi.workspace]
 name = "pyqualw2"
@@ -28,3 +47,65 @@ platforms = ["linux-64"]
 pyqualw2 = { path = ".", editable = true }
 
 [tool.pixi.tasks]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "ANN", # annotations
+    "ARG", # flake8-unused-arguments
+    "B", # flake8-bugbear
+    "D", # pydocstyle
+    "E", # pycodestyle
+    "ERA", # flake8-eradicate
+    "F", # Pyflakes
+    "FIX", # flake8-fixme
+    "I", # isort
+    "N", # pep8 naming
+    "NPY", # numpy-specific rules
+    "PD", # pandas-vet
+    "PT", # flake8-pytest
+    "RET", # flake8-return
+    "SIM", # flake8-simplify
+    "T10", # debugger
+    "T20", # flake8-print
+    "UP", # pyupgrade
+    "W", # pycodestyle
+]
+ignore = [
+    "ANN002", # Missing type annotation for `*args`
+    "ANN003", # Missing type annotation for `**kwargs`
+    "ANN204", # Missing return type annotation for special method
+    "D100", # Missing docstring in public module
+    "D104", # Missing docstring in public package
+    "D105", # Missing docstring in magic method
+    "D107", # Missing docstring in __init__
+    "D203", # 1 blank line before after class docstring
+    "D213", # Multiline summary second line
+    "D413", # 1 black line after parameters
+    "N803", # Argument name should be lowercase. We use it everywhere here
+    "N806", # Variable name should be lowercase; uppercase indicates constants
+    "RET505", # Unnecessary elif after return statement; not always clearer
+    "SIM108", # Simplify if/else to one line; not always clearer
+    "SIM114", # Combine `if` branches using logical `or` operator; not always clearer
+    "SIM300", # Yoda condition `a < var`; clearer in `a < var and var < b`
+    "UP032", # Use f-string instead of `format` call; not always clearer
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"test/*.py" = [
+    "ANN001",
+    "N802",  # Function name should be lowercase
+]
+"pyqualw2/config/subconfig.py" = [
+    "D101",
+    "D102",
+]
+
+[tool.isort]
+profile = "black"
+
+[tool.ruff.lint.flake8-annotations]
+suppress-none-returning = true

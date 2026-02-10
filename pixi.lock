@@ -5,6 +5,8 @@ environments:
     - url: https://conda.anaconda.org/conda-forge/
     indexes:
     - https://pypi.org/simple
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
@@ -429,14 +431,13 @@ packages:
 - pypi: ./
   name: pyqualw2
   version: 0.0.1
-  sha256: e5037edfb7d35ea79eb2f4eb043e55954ac5c78c38831230d1923aa67b5ad528
+  sha256: 24e6bc7cb88a4d829f8bb79cf7338f0b249396a50e2e8efd8dbe087ed123d3de
   requires_dist:
   - typer>=0.20
   - pandas
   - rich
   - tomli>=2.3.0,<3
   requires_python: '>=3.13'
-  editable: true
 - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.14.0-h32b2ec7_102_cp314.conda
   build_number: 102
   sha256: 76d750045b94fded676323bfd01975a26a474023635735773d0e4d80aaa72518
