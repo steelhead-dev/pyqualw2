@@ -26,7 +26,10 @@ test = [
 ]
 
 [workspace]
-authors = ["bobo-baggins <urbanecoguard@gmail.com>"]
+authors = [
+    {name = "bobo-baggins", email="urbanecoguard@gmail.com"},
+    {name = "Peyton Murray", email="peynmurray@gmail.com"},
+]
 channels = ["conda-forge"]
 name = "pyqualw2"
 platforms = ["linux-64"]
