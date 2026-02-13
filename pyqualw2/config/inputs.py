@@ -630,3 +630,36 @@ def _create_parents_or_fail(
                     f"Parent directory {path.parent} does not exist. Aborting. "
                     "To create the parent directory, pass `create_parents=True`."
                 )
+
+@dataclass
+class MetDataInput(BaseInput, year):
+
+    data : pd.DataFrame
+    filename: PathLike
+    year : Int
+
+    @classmethod
+    def from_file(cls, src, wd, year) -> Self:
+        
+        met_dir = src / 'met_data'
+        year_str = str(year)
+        search_pattern = f"*{year_str}*"
+        filename = met_dir.glob(search_pattern)
+
+        if Path(filename).suffix != ".csv":
+            raise NotImplementedError
+        else:
+            data = pd.read_csv(filename)
+    
+    def to_file(
+            self, 
+            filename: PathLike,
+            overwrite: bool = False,
+            create_parents: bool = False,
+        ):
+
+        path = Path(filename)
+        if path.suffix != ".csv":
+            raise NotImplementedError
+        else:
+            pd.write_csv(filename)
