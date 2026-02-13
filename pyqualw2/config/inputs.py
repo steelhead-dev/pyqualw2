@@ -142,7 +142,6 @@ class BathymetryInput(BaseInput):
             data=data,
         )
 
-
 @dataclass
 class ProfileInput(BaseInput):
     """A container for profile (layer-dependent) input data."""
@@ -371,3 +370,219 @@ class W2ConSimpleInput(BaseInput):
         _, _, _, *rest = lines[self.time_lineno].split(",")
         lines[self.time_lineno] = ",".join([str(tmstart), str(tmend), str(year), *rest])
         self.content = "".join(lines)
+
+@dataclass
+class MetDataInput(BaseInput):
+    """
+    Parser for reading in Met Data files from project database
+    """
+    data: pd.DataFrame
+    filename: PathLike
+
+    @classmethod
+    def from_file(cls, filename: PathLike) -> Self:
+        """Parse a w2_con.csv profile file.
+
+        Parameters
+        ----------
+        filename : PathLike
+            Path to a temperature profile file, e.g. mvpr1.npt
+
+        Returns
+        -------
+        Self
+            The temperature profile, total dissolved solids, and dissolved oxygen
+        """
+        if Path(filename).suffix != ".csv":
+            raise NotImplementedError
+        df_met = pd.read_csv(f'met_data/{year}_CEQUAL_met_inputs,csv', index_col=0, parse_dates=True)        
+    
+        # df_met = df_met[(df_met.JDAY >= start_jday) & (df_met.JDAY <= end_jday)]
+        # Use the met data with the replaced JDAY values
+    data = {
+        'JDAY': df_met.JDAY.values * 1.000,
+        'TAIR': df_met.TAIR.values * 1.000,
+        'TDEW': df_met.TDEW.values * 1.000,
+        'WIND': df_met.WIND.values * 1.000,
+        'PHI': df_met.PHI.values * 1.000,
+        'CLOUD': df_met.CLOUD.values * 1.000,
+        'SRO': df_met.SRO.values * 1.000
+    }
+    
+    # Format all values to 2 decimal places
+    for key in data:
+        data[key] = [f'{x:0.2f}' for x in data[key]]
+    
+    # Create mmet3.npt
+    with open('initial_files/mmet3_init.npt', "r") as f:
+        lines = f.readlines()
+    for i in range(len(data['JDAY'])):
+        lines.append(f"\n{data['JDAY'][i]:>8}{data['TAIR'][i]:>8}{data['TDEW'][i]:>8}{data['WIND'][i]:>8}{data['PHI'][i]:>8}{data['CLOUD'][i]:>8}{data['SRO'][i]:>8}")
+    lines.append("\n")
+    with open('mmet3.npt', "w") as update:
+        update.writelines(lines)
+    print(f"Created mmet3.npt with {len(data['JDAY'])} lines of hourly data")
+
+@dataclass
+class FlowInput(BaseInput):
+    """
+    Parser for reading in Met Data files from project database
+    """
+    data: pd.DataFrame
+    filename: PathLike
+
+    @classmethod
+    def from_file(cls, filename: PathLike) -> Self:
+        """Parse a w2_con.csv profile file.
+
+        Parameters
+        ----------
+        filename : PathLike
+            Path to a temperature profile file, e.g. mvpr1.npt
+
+        Returns
+        -------
+        Self
+        """
+        if Path(filename).suffix != ".csv":
+            raise NotImplementedError 
+        df_flow = pd.read_csv('flow_data/flow_data_base.csv', index_col=0, parse_dates=True)
+    
+    
+    df_flow.index = pd.to_datetime(df_flow.index)
+    start_date_inclusive = pd.Timestamp(start_date).floor('D')
+    end_date_inclusive = pd.Timestamp(end_date).ceil('D')
+    
+    # Calculate Julian days for start and end dates
+    start_jday = (start_date_inclusive - pd.Timestamp('1921-01-01')).days + 1
+    end_jday = (end_date_inclusive - pd.Timestamp('1921-01-01')).days + 1
+    
+    
+    df_flow = df_flow[(df_flow.index >= start_date_inclusive) & (df_flow.index <= end_date_inclusive)]
+    
+def format_data_for_model(df_flow, df_temp, analog_year):
+    """Format data for model input files"""
+    SPL_OUT = df_flow.SPL_OUT.values * 0.028316847
+    FKC_OUT = df_flow.FKC_OUT.values * 0.028316847
+    MC_OUT = df_flow.MC_OUT.values * 0.028316847
+    SJR_OUT = df_flow.SJR_OUT.values * 0.028316847
+    M_IN = np.abs(df_flow.M_IN.values * 0.028316847)
+    MIL_EVAP = df_flow.MIL_EVAP.values * 0.028316847
+    JDAY = df_flow.JDAY.values * 1.000
+    zero_filler = np.zeros(len(df_flow.index)) * 1.000
+    
+    return {
+        'SPL_OUT': SPL_OUT,
+        'FKC_OUT': FKC_OUT,
+        'MC_OUT': MC_OUT,
+        'SJR_OUT': SJR_OUT,
+        'M_IN': M_IN,
+        'MIL_EVAP': MIL_EVAP,
+        'JDAY': JDAY,
+        'Temp_predicted': Temp_predicted,
+        'zero_filler': zero_filler
+    }
+
+def create_input_files(data, analog_year):
+    """Create all required input files for the model"""
+    # Format all values to 2 decimal places
+    for key in data:
+        if key != 'zero_filler':
+            data[key] = [f'{x:0.2f}' for x in data[key]]
+        else:
+            data[key] = [f'{x:0.2f}' for x in data[key]]
+    
+    # Create mqot_br1.npt
+    with open('initial_files/mqot_br1_init.npt', "r") as f:
+        lines = f.readlines()
+    for i in range(len(data['JDAY'])):
+        lines.append(f"\n{data['JDAY'][i]:>8}{data['SPL_OUT'][i]:>8}{data['FKC_OUT'][i]:>8}{data['MC_OUT'][i]:>8}{data['SJR_OUT'][i]:>8}")
+    with open('mqot_br1.npt', "w") as update:
+        update.writelines(lines)
+    
+    # Create mqdt_br1.npt
+    with open('initial_files/mqdt_br1_init.npt', "r") as f:
+        lines = f.readlines()
+    for i in range(len(data['JDAY'])):
+        lines.append(f"\n{data['JDAY'][i]:>8}{data['MIL_EVAP'][i]:>8}")
+    with open('mqdt_br1.npt', "w") as update:
+        update.writelines(lines)
+    
+    # Create mqin_br1.npt
+    with open('initial_files/mqin_br1_init.npt', "r") as f:
+        lines = f.readlines()
+    for i in range(len(data['JDAY'])):
+        lines.append(f"\n{data['JDAY'][i]:>8}{data['M_IN'][i]:>8}")
+    with open('mqin_br1.npt', "w") as update:
+        update.writelines(lines)
+    
+    # Create mqin_br2-4.npt files
+    for branch in ['2', '3', '4']:
+        with open(f'initial_files/mqin_br{branch}_init.npt', "r") as f:
+            lines = f.readlines()
+        for i in range(len(data['JDAY'])):
+            lines.append(f"\n{data['JDAY'][i]:>8}{data['zero_filler'][i]:>8}")
+        with open(f'mqin_br{branch}.npt', "w") as update:
+            update.writelines(lines)
+    
+    @dataclass
+class TempInput(BaseInput):
+    """
+    Parser for reading in Met Data files from project database
+    """
+    data: pd.DataFrame
+    filename: PathLike
+
+    @classmethod
+    def from_file(cls, filename: PathLike) -> Self:
+        """Parse a w2_con.csv profile file.
+
+        Parameters
+        ----------
+        filename : PathLike
+            Path to a temperature profile file, e.g. mvpr1.npt
+
+        Returns
+        -------
+        Self
+            The temperature profile, total dissolved solids, and dissolved oxygen
+        """
+        if Path(filename).suffix != ".csv":
+            raise NotImplementedError 
+        df_temp = pd.read_csv('flow_data/flow_data_temp.csv', index_col=0, parse_dates=True)
+    
+    
+    start_date_inclusive = pd.Timestamp(start_date).floor('D')
+    end_date_inclusive = pd.Timestamp(end_date).ceil('D')
+    
+    # Calculate Julian days for start and end dates
+    start_jday = (start_date_inclusive - pd.Timestamp('1921-01-01')).days + 1
+    end_jday = (end_date_inclusive - pd.Timestamp('1921-01-01')).days + 1
+    
+    
+    df_temp = df_temp[(df_temp.index >= start_date_inclusive) & (df_temp.index <= end_date_inclusive)]
+    
+
+    def format_data_for_model(df_flow, df_temp, analog_year):
+    """Format data for model input files"""
+        JDAY = df_flow.JDAY.values * 1.000
+        Temp_predicted = df_temp[f'{analog_year}_Temp'].values * 1.000
+        zero_filler = np.zeros(len(df_flow.index)) * 1.000
+    
+        return {
+            'JDAY': JDAY,
+            'Temp_predicted': Temp_predicted,
+            'zero_filler': zero_filler
+        }
+
+    def create_input_files(data, analog_year):
+   
+        # Create mtin_br1-4.npt files
+        for branch in ['1', '2', '3', '4']:
+            with open(f'initial_files/mtin_br{branch}_init.npt', "r") as f:
+                lines = f.readlines()
+            for i in range(len(data['JDAY'])):
+                lines.append(f"\n{data['JDAY'][i]:>8}{data['Temp_predicted'][i]:>8}")
+            with open(f'mtin_br{branch}.npt', "w") as update:
+                update.writelines(lines)
+
