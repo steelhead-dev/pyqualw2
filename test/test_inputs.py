@@ -46,11 +46,11 @@ def test_load_bathymetry(sample_bathymetry):
     assert bathy.data.shape == (212, 48)
 
 
-def test_load_temperature(sample_temperature):
+def test_load_temperature(sample_profile):
     """Test that Temperature.from_file can load data from a file."""
-    prof = ProfileInput.from_file(sample_temperature)
+    prof = ProfileInput.from_file(sample_profile)
 
-    assert prof.filename == sample_temperature
+    assert prof.filename == sample_profile
     assert prof.comment == (
         "File created from SJRRP Milerton Temperature Profile Viewer real string "
         "measurements"
@@ -64,6 +64,50 @@ def test_load_temperature(sample_temperature):
     assert prof.data["TDS mgl"].shape == (216,)
     assert prof.data["DO mgl"].shape == (216,)
 
-    np.testing.assert_equal(prof.data["TemperC"][1:4], [20.35, 20.04, 19.93])
-    np.testing.assert_equal(prof.data["TDS mgl"][6:9], [30.8, 29.5, 28.19])
-    np.testing.assert_equal(prof.data["DO mgl"][1:4], [9.87, 9.94, 9.98])
+    np.testing.assert_equal(prof.data["TemperC"].to_numpy()[1:4], [20.35, 20.04, 19.93])
+    np.testing.assert_equal(prof.data["TDS mgl"].to_numpy()[6:9], [30.8, 29.5, 28.19])
+    np.testing.assert_equal(prof.data["DO mgl"].to_numpy()[1:4], [9.87, 9.94, 9.98])
+
+
+def test_write_bathymetry(sample_bathymetry, tmp_path):
+    """Test that writing bathymetry data to a file works as intended."""
+    path = tmp_path / "test.csv"
+    bathy = BathymetryInput.from_file(sample_bathymetry)
+    bathy.to_file(path)
+
+
+def test_write_profile(sample_profile, tmp_path):
+    """Test that writing profile data to a file works as intended."""
+    path = tmp_path / "test.npt"
+    prof = ProfileInput.from_file(sample_profile)
+
+    with open(sample_profile) as f:
+        lines = f.readlines()
+
+    prof.to_file(path)
+    with open(path) as f:
+        newlines = f.readlines()
+
+    # Check that the new file is the same number of lines as the old
+    assert len(newlines) == len(lines)
+    assert newlines[0].startswith("Profile file:")
+
+
+def test_write_w2con(sample_w2_con, tmp_path):
+    """Test that writing the w2_con file to disk works as intended."""
+    path = tmp_path / "test.csv"
+    obj = W2ConSimpleInput.from_file(sample_w2_con)
+
+    with open(sample_w2_con) as f:
+        lines = f.readlines()
+
+    assert obj.timedata != (1, 2, 3)
+    obj.timedata = (1, 2, 3)
+    obj.to_file(path)
+    with open(path) as f:
+        newlines = f.readlines()
+
+    assert len(newlines) == len(lines)
+    assert newlines[: obj.time_lineno] == lines[: obj.time_lineno]
+    assert newlines[obj.time_lineno + 1 :] == lines[obj.time_lineno + 1 :]
+    assert newlines[obj.time_lineno].startswith("1,2,3,")
