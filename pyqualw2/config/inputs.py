@@ -16,12 +16,12 @@ class BaseInput(ABC):
 
     @classmethod
     @abstractmethod
-    def from_file(cls, filename: PathLike) -> Self:
+    def from_file(cls, filename: PathLike | str) -> Self:
         """Parse a data file to a python object.
 
         Parameters
         ----------
-        filename : PathLike
+        filename : PathLike | str
             Path to the data file
 
         Returns
@@ -33,7 +33,7 @@ class BaseInput(ABC):
     @abstractmethod
     def to_file(
         self,
-        filename: PathLike,
+        filename: PathLike | str,
         overwrite: bool = False,
         create_parents: bool = False,
     ):
@@ -41,7 +41,7 @@ class BaseInput(ABC):
 
         Parameters
         ----------
-        filename : PathLike
+        filename : PathLike | str
             Path where the data should be written
         overwrite : bool
             If True, overwrite an existing file
@@ -57,7 +57,7 @@ class BathymetryInput(BaseInput):
     data: pd.DataFrame
     segment_data: pd.DataFrame
     ignored: list[str]
-    filename: PathLike | None = None
+    filename: PathLike | str | None = None
     comment: str | None = None
 
     # This mapping defines human readable mappings that are used to relabel the input
@@ -178,12 +178,12 @@ class BathymetryInput(BaseInput):
         return df[[col_height, *col_widths, col_number]]
 
     @classmethod
-    def from_file(cls, filename: PathLike) -> Self:
+    def from_file(cls, filename: PathLike | str) -> Self:
         """Parse a bathymetry file.
 
         Parameters
         ----------
-        filename : PathLike
+        filename : PathLike | str
             Path to a bathymetry file, e.g. mbth_wb1.csv
 
         Returns
@@ -254,7 +254,7 @@ class BathymetryInput(BaseInput):
 
     def to_file(
         self,
-        filename: PathLike,
+        filename: PathLike | str = "mbth.csv",
         overwrite: bool = False,
         create_parents: bool = False,
     ):
@@ -262,7 +262,7 @@ class BathymetryInput(BaseInput):
 
         Parameters
         ----------
-        filename : PathLike
+        filename : PathLike | str
             Path where the data should be written
         overwrite : bool
             If True, overwrite an existing file
@@ -293,10 +293,10 @@ class ProfileInput(BaseInput):
     comment: str
     data: pd.DataFrame
     profile_file: str | None
-    filename: PathLike | None = None
+    filename: PathLike | str | None = None
 
     @classmethod
-    def from_file(cls, filename: PathLike) -> Self:
+    def from_file(cls, filename: PathLike | str) -> Self:
         """Parse a profile file.
 
         Profile files contain layer-dependent quantities, such as temperature,
@@ -304,7 +304,7 @@ class ProfileInput(BaseInput):
 
         Parameters
         ----------
-        filename : PathLike
+        filename : PathLike | str
             Path to a profile file, e.g. mvpr1.npt
 
         Returns
@@ -449,7 +449,7 @@ class ProfileInput(BaseInput):
 
     def to_file(
         self,
-        filename: PathLike,
+        filename: PathLike | str = "mvpr1.npt",
         overwrite: bool = False,
         create_parents: bool = False,
     ):
@@ -457,7 +457,7 @@ class ProfileInput(BaseInput):
 
         Parameters
         ----------
-        filename : PathLike
+        filename : PathLike | str
             Path where the data should be written
         overwrite : bool
             If True, overwrite an existing file
@@ -521,17 +521,17 @@ class W2ConSimpleInput(BaseInput):
     and modify TMSTRT, TMEND, and YEAR values.
     """
 
-    filename: PathLike
+    filename: PathLike | str
     content: str
     time_lineno: int
 
     @classmethod
-    def from_file(cls, filename: PathLike) -> Self:
+    def from_file(cls, filename: PathLike | str) -> Self:
         """Parse a qualw2 config file.
 
         Parameters
         ----------
-        filename : PathLike
+        filename : PathLike | str
             Path to a qualw2 config file, e.g. w2_con.csv
 
         Returns
@@ -557,7 +557,7 @@ class W2ConSimpleInput(BaseInput):
 
     def to_file(
         self,
-        filename: PathLike,
+        filename: PathLike | str = "w2_con.csv",
         overwrite: bool = False,
         create_parents: bool = False,
     ):
@@ -565,7 +565,7 @@ class W2ConSimpleInput(BaseInput):
 
         Parameters
         ----------
-        filename : PathLike
+        filename : PathLike | str
             Path where the data should be written
         overwrite : bool
             If True, overwrite an existing file
